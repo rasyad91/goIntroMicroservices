@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/go-openapi/runtime/middleware"
 	"github.com/gorilla/mux"
 	"github.com/rasyad91/introMicroservices/handlers"
 )
@@ -24,14 +25,27 @@ func main() {
 	sm := mux.NewRouter()
 	getRouter := sm.Methods("GET").Subrouter()
 	getRouter.HandleFunc("/", ph.GetProducts)
+	getRouter.HandleFunc("/products/{id:[0-9]+}", ph.GetProductByID)
 
 	putRouter := sm.Methods("PUT").Subrouter()
-	putRouter.Use(ph.MiddlewareFromJSON)
+	putRouter.Use(ph.MiddlewareValidateProduct)
 	putRouter.HandleFunc("/{id:[0-9]+}", ph.PutProduct)
 
 	postRouter := sm.Methods("POST").Subrouter()
-	postRouter.Use(ph.MiddlewareFromJSON)
+	postRouter.Use(ph.MiddlewareValidateProduct)
 	postRouter.HandleFunc("/", ph.PostProduct)
+
+	deleteRouter := sm.Methods("DELETE").Subrouter()
+	deleteRouter.Use(ph.MiddlewareValidateProduct)
+	deleteRouter.HandleFunc("/{id:[0-9]+}", ph.DeleteProduct)
+
+	// handler for documentation
+	// uses redocs middleware
+	ops := middleware.RedocOpts{SpecURL: "/swagger.yaml"}
+	sh := middleware.Redoc(ops, nil)
+
+	getRouter.Handle("/docs", sh)
+	getRouter.Handle("/swagger.yaml", http.FileServer(http.Dir("./")))
 
 	// why an address to the server
 	// create a new server
@@ -56,8 +70,8 @@ func main() {
 	signal.Notify(sigChan, os.Kill)
 
 	sig := <-sigChan
-	l.Println("Received terminate, graceful shutdonw", sig)
-	tc, _ := context.WithTimeout(context.Background(), 30*time.Second)
-
+	l.Println("Received terminate, graceful shutdown ", sig)
+	tc, c := context.WithTimeout(context.Background(), 30*time.Second)
+	_ = c
 	s.Shutdown(tc)
 }

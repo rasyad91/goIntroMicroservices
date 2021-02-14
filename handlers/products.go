@@ -2,25 +2,58 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 
-	"github.com/gorilla/mux"
 	"github.com/rasyad91/introMicroservices/data"
 )
 
+// A list of products returns in the response
+
+// Products struct
 type Products struct {
 	l *log.Logger
 }
 
+// NewProducts creates new list of Product for handler
 func NewProducts(l *log.Logger) *Products {
 	return &Products{
 		l: l,
 	}
 }
 
+// KeyProduct for reflection
 type KeyProduct struct{}
+
+// MiddlewareValidateProduct middleware for validates if
+func (p *Products) MiddlewareValidateProduct(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		prod := &data.Product{}
+		err := prod.FromJSON(r.Body)
+		if err != nil {
+			p.l.Println(err)
+			http.Error(rw, "Unable to unmarshal JSON", http.StatusBadRequest)
+			return
+		}
+
+		err = prod.Validate()
+		if err != nil {
+			p.l.Println("[ERROR] invalid product")
+			http.Error(
+				rw,
+				fmt.Sprintf("Error validating product: %v\n", err),
+				http.StatusBadRequest,
+			)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), KeyProduct{}, prod)
+		r = r.WithContext(ctx)
+
+		next.ServeHTTP(rw, r)
+	})
+}
 
 // REFACTORED USING GORILLA
 // func (p *Products) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
@@ -67,66 +100,3 @@ type KeyProduct struct{}
 // 		}
 // 	}
 // }
-
-// getProducts returns the products from the data stored
-func (p *Products) GetProducts(rw http.ResponseWriter, r *http.Request) {
-	p.l.Println("Handle GET Products")
-
-	// Get products from data products => encode to JSON
-	lp := data.GetProducts()
-	err := lp.ToJSON(rw)
-	if err != nil {
-		http.Error(rw, "Unable to marshal JSON", http.StatusInternalServerError)
-	}
-}
-
-// PostProduct add a new product into the data stored
-func (p *Products) PostProduct(rw http.ResponseWriter, r *http.Request) {
-	// p.l.Println("Handle POST Products")
-	prod := r.Context().Value(KeyProduct{}).(data.Product)
-	p.l.Printf("POST Prod: %#v", prod)
-	data.AddProduct(&prod)
-
-}
-
-// PutProduct uses UpdateProduct to updates product to database
-func (p *Products) PutProduct(rw http.ResponseWriter, r *http.Request) {
-	// p.l.Println("Handle POST Products")
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		p.l.Println(err)
-		http.Error(rw, "Unable to convert ID", http.StatusBadRequest)
-	}
-	prod := r.Context().Value(KeyProduct{}).(data.Product)
-
-	p.l.Printf("PUT Prod: %#v", prod)
-	err = data.UpdateProduct(id, &prod)
-	if err == data.ErrProductNotFound {
-		http.Error(rw, "Product not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		http.Error(rw, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-}
-
-// MiddlewareFromJSON middleware for validates if
-func (p *Products) MiddlewareFromJSON(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		prod := &data.Product{}
-		err := prod.FromJSON(r.Body)
-		if err != nil {
-			p.l.Println(err)
-			http.Error(rw, "Unable to unmarshal JSON", http.StatusBadRequest)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), KeyProduct{}, prod)
-		r = r.WithContext(ctx)
-
-		next.ServeHTTP(rw, r)
-	})
-}
