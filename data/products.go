@@ -45,16 +45,18 @@ func AddProduct(p *Product) {
 	productList = append(productList, p)
 }
 
+// UpdateProduct updates existing data with respect to ID
 func UpdateProduct(id int, p *Product) error {
 	pos, err := findProduct(id)
 	if err != nil {
 		return err
 	}
-	// p.ID = id
+	p.ID = id
 	productList[pos] = p
 	return nil
 }
 
+// ErrProductNotFound - Error
 var ErrProductNotFound = fmt.Errorf("Product not found")
 
 func findProduct(id int) (int, error) {

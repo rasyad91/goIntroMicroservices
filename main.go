@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/rasyad91/introMicroservices/handlers"
 )
 
@@ -19,8 +20,18 @@ func main() {
 	ph := handlers.NewProducts(l)
 
 	// create a new serve mux and register the handler
-	sm := http.NewServeMux()
-	sm.Handle("/", ph)
+	//sm := http.NewServeMux()
+	sm := mux.NewRouter()
+	getRouter := sm.Methods("GET").Subrouter()
+	getRouter.HandleFunc("/", ph.GetProducts)
+
+	putRouter := sm.Methods("PUT").Subrouter()
+	putRouter.Use(ph.MiddlewareFromJSON)
+	putRouter.HandleFunc("/{id:[0-9]+}", ph.PutProduct)
+
+	postRouter := sm.Methods("POST").Subrouter()
+	postRouter.Use(ph.MiddlewareFromJSON)
+	postRouter.HandleFunc("/", ph.PostProduct)
 
 	// why an address to the server
 	// create a new server
